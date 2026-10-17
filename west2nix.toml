@@ -3,7 +3,7 @@ group-filter = ["-babblesim", "-optional", "-testing"]
 
 [[manifest.projects]]
 name = "zephyr"
-url = "https://github.com/cyber-murmel/zephyr"
+url = "https://github.com/deadcaf3/zephyr"
 revision = "ffb8a7cce5d31e098a09854d065e2e5ef7c493a4"
 path = "modules/zephyr"
 west-commands = "scripts/west-commands.yml"
@@ -13,7 +13,7 @@ hash = "sha256-hsljlgGSKRWV71oK48J0J9jjmQRxdI8pq0I5ZD7JJrQ="
 
 [[manifest.projects]]
 name = "hal_espressif"
-url = "https://github.com/cyber-murmel/hal_espressif"
+url = "https://github.com/deadcaf3/hal_espressif"
 revision = "54d64a1289e8d0cddccef6359a385ffb4c68b213"
 path = "modules/hal/espressif"
 groups = ["hal"]
@@ -23,7 +23,7 @@ hash = "sha256-2OnaUIQZHGDceOU4mvLpwgbhafByLUdmWGcjHHW7Cmw="
 
 [[manifest.projects]]
 name = "libvrt"
-url = "https://github.com/cyber-murmel/libvrt"
+url = "https://github.com/deadcaf3/libvrt"
 revision = "6ee1471079b969d843aa2f7dbc6ac74c086168a2"
 path = "modules/lib/libvrt"
 
@@ -32,7 +32,7 @@ hash = "sha256-ZsZrPNPtJWvX9EZnBq+M6zWyjZtdmvsbWoaeqzkp5ik="
 
 [[manifest.projects]]
 name = "esp-sdr"
-url = "https://github.com/ESPARGOS/esp-sdr"
+url = "https://github.com/deadcaf3/esp-sdr"
 revision = "1fe55351036337359bcac1ccca6db04c32fde4f8"
 path = "modules/lib/esp-sdr"
 

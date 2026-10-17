@@ -14,13 +14,15 @@ manifest:
       url-base: https://github.com/ESPARGOS
     - name: espressif
       url-base: https://github.com/espressif
+    - name: deadcaf3
+      url-base: https://github.com/deadcaf3
 
   projects:
     # Zephyr with ESP32-S3 SMP (zephyrproject-rtos/zephyr#120082, rebased), the
     # CDC-NCM NTB aggregation the USB stream relies on, and the llext and
     # Xtensa changes apps/multiapp needs (doc/multiapp.md, "Zephyr changes").
     - name: zephyr
-      remote: cyber-murmel
+      remote: deadcaf3
       revision: ffb8a7cce5d31e098a09854d065e2e5ef7c493a4 # esp-sdr-multiapp branch
       path: modules/zephyr
       import:
@@ -32,19 +34,19 @@ manifest:
     # The HAL companion of the SMP port; listed here so it overrides the
     # revision Zephyr's own manifest pins.
     - name: hal_espressif
-      remote: cyber-murmel
+      remote: deadcaf3
       revision: 54d64a1289e8d0cddccef6359a385ffb4c68b213 # esp-sdr branch
       path: modules/hal/espressif
       groups:
         - hal
     # VITA 49 packet library, extended to VITA 49.2, with a Zephyr module.
     - name: libvrt
-      remote: cyber-murmel
+      remote: deadcaf3
       revision: 6ee1471079b969d843aa2f7dbc6ac74c086168a2 # esp-sdr branch
       path: modules/lib/libvrt
     # Upstream ESP-IDF firmware: only its header-only receiver helpers are used.
     - name: esp-sdr
-      remote: espargos
+      remote: deadcaf3
       revision: 1fe55351036337359bcac1ccca6db04c32fde4f8
       path: modules/lib/esp-sdr
     # Espressif DSP library: only the ESP32-S3 FFT kernel (apps/link OFDM).
