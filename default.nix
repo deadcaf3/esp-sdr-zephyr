@@ -13,10 +13,14 @@
 
 let
   nixpkgs-ref = "c9bfd86ed684d27e63b0ff9ebb18699f84f27a3b"; # nixos-25.11-small
+  nixpkgs-sha256 = "0ki8xkxmddhhpdknkg7sq3cpi5k58xfdcl8ifv0qldyl3vjpznrm";
   pyproject-nix-ref = "69f57f27e52a87c54e28138a75ec741cd46663c9";
+  pyproject-nix-sha256 = "1f317zf86kdvhp15b65n5mz5nhngw7q0n04lqicl94h296f5bk8s";
   zephyr-nix-ref = "6966fb1cbf2fdb494bea3062c5e8e7d44dd8ac9c";
+  zephyr-nix-sha256 = "0h3y6cqsckyawc9m49bfwh9xprzndqv28isdg7ln5chgac8cxfp3";
   nixpkgs-esp-dev-ref = "5287d6e1ca9e15ebd5113c41b9590c468e1e001b";
   west2nix-ref = "f84670d66f881d9340b7d7626fbfe499438c134b";
+  west2nix-sha256 = "0nz76s6a6ybm733lvjynzilwv3in5wsj5l2dxr0nj0mvvv8qga0g";
 
   nixpkgs-esp-dev = builtins.fetchGit {
     url = "https://github.com/mirrexagon/nixpkgs-esp-dev.git";
@@ -25,7 +29,7 @@ let
 in
 
 {
-  pkgs ? (import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${nixpkgs-ref}.tar.gz") {
+  pkgs ? (import (builtins.fetchTarball { url = "https://github.com/NixOS/nixpkgs/archive/${nixpkgs-ref}.tar.gz"; sha256 = nixpkgs-sha256; }) {
     overlays = [ (import "${nixpkgs-esp-dev}/overlay.nix") ];
     # The Python library ecdsa is marked as insecure, but we need it for esptool.
     # See https://github.com/mirrexagon/nixpkgs-esp-dev/issues/109
@@ -33,7 +37,9 @@ in
       "python3.13-ecdsa-0.19.1"
     ];
   }),
-  zephyr-src-ref ? "v4.4.0",
+  # Override both together.
+  zephyr-src-ref ? "684c9e8f32e4373a21098559f748f06915f950c9", # v4.4.0
+  zephyr-src-sha256 ? "13j3fj7hzl0ng9qijnicd4yazjwj85wa4b6fjj7a7r0mql95rbx8",
   # Apps left out of the firmware and the host tools.
   excludeApps ? [ "ubertooth" ],
 }:
@@ -45,15 +51,15 @@ let
     (lib.splitString "\n" (builtins.readFile ./VERSION)));
   version = lib.concatMapStringsSep "." versionOf [ "VERSION_MAJOR" "VERSION_MINOR" "PATCHLEVEL" ];
 
-  zephyr-nix = ((import (builtins.fetchTarball "https://github.com/nix-community/zephyr-nix/archive/${zephyr-nix-ref}.tar.gz")) {
+  zephyr-nix = ((import (builtins.fetchTarball { url = "https://github.com/nix-community/zephyr-nix/archive/${zephyr-nix-ref}.tar.gz"; sha256 = zephyr-nix-sha256; })) {
     inherit (pkgs) lib newScope openocd autoreconfHook fetchFromGitHub gcc_multi python312;
-    zephyr-src = builtins.fetchTarball "https://github.com/zephyrproject-rtos/zephyr/archive/${zephyr-src-ref}.tar.gz";
-    pyproject-nix = (import (builtins.fetchTarball "https://github.com/pyproject-nix/pyproject.nix/archive/${pyproject-nix-ref}.tar.gz")) {
+    zephyr-src = builtins.fetchTarball { url = "https://github.com/zephyrproject-rtos/zephyr/archive/${zephyr-src-ref}.tar.gz"; sha256 = zephyr-src-sha256; };
+    pyproject-nix = (import (builtins.fetchTarball { url = "https://github.com/pyproject-nix/pyproject.nix/archive/${pyproject-nix-ref}.tar.gz"; sha256 = pyproject-nix-sha256; })) {
       inherit (pkgs) lib;
     };
   });
 
-  west2nix = pkgs.callPackage (builtins.fetchTarball "https://github.com/adisbladis/west2nix/archive/${west2nix-ref}.tar.gz") { };
+  west2nix = pkgs.callPackage (builtins.fetchTarball { url = "https://github.com/adisbladis/west2nix/archive/${west2nix-ref}.tar.gz"; sha256 = west2nix-sha256; }) { };
 
   # west2nix.toml from the workspace's west projects (at their manifest revisions), written
   # here; run from anywhere in the workspace. west2nix takes the revisions from manifest-rev,
