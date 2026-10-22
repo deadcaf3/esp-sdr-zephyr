@@ -5,6 +5,8 @@ build:
   settings:
     # boards/waveshare/esp32c5_zero
     board_root: .
+    # dts/bindings: the 802.15.4 software radio's node (OpenThread finds its radio there)
+    dts_root: .
 samples:
   - apps
 blobs:

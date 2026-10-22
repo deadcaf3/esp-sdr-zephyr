@@ -15,7 +15,8 @@
  *
  * Frames that ask for an ACK wait for it (one capture after the frame);
  * frames to this node that ask for one get it from inside the ring run
- * (CONFIG_ESP_SDR_IEEE802154_AUTO_ACK). CCA and energy detection are not done.
+ * (CONFIG_ESP_SDR_IEEE802154_AUTO_ACK). RSSI and CCA read the Wi-Fi AGC's input
+ * level; energy detection scans are not done.
  */
 
 #include <errno.h>
@@ -28,6 +29,9 @@
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#if defined(CONFIG_NET_L2_OPENTHREAD)
+#include <zephyr/net/openthread.h>
+#endif
 #include <zephyr/drivers/hwinfo.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
@@ -44,6 +48,11 @@
 #include "ieee154_dsp.h"
 
 LOG_MODULE_REGISTER(esp_sdr_154, CONFIG_ESP_SDR_IEEE802154_LOG_LEVEL);
+
+/* Frames go to a network interface: the native 802.15.4 L2 or OpenThread's. */
+#if defined(CONFIG_NET_L2_IEEE802154) || defined(CONFIG_NET_L2_OPENTHREAD)
+#define SDR154_NET 1
+#endif
 
 #define LO_OFFSET_MHZ IEEE154_DSP_LO_OFFSET_MHZ
 #define TX_AMP        300.0f
@@ -253,13 +262,13 @@ static void radio_give(struct sdr154_data *d)
 	k_mutex_unlock(&d->radio_lock);
 }
 
-#if !defined(CONFIG_NET_L2_IEEE802154)
+#if !defined(SDR154_NET)
 static ieee154_esp_sdr_rx_cb_t rx_cb;
 #endif
 
 void ieee154_esp_sdr_set_rx_cb(ieee154_esp_sdr_rx_cb_t cb)
 {
-#if defined(CONFIG_NET_L2_IEEE802154)
+#if defined(SDR154_NET)
 	ARG_UNUSED(cb); /* frames go to the network interface */
 #else
 	rx_cb = cb;
@@ -285,7 +294,25 @@ static void verdict_latency(struct sdr154_data *d);
 #endif
 #if defined(CONFIG_ESP_SDR_IEEE802154_AUTO_ACK)
 static void ack_verdict(struct sdr154_data *d);
+
+/*
+ * The AGC's input level at the PHR of the frame being decoded: the PHY trails
+ * the air by about 100 us, so the frame is still on air there. After it the
+ * AGC returns to its idle gain.
+ */
+static int hdr_level = -1;
 #endif
+
+/* RSSI of the frame just decided. */
+static int16_t frame_rssi_dbm(void)
+{
+#if defined(CONFIG_ESP_SDR_IEEE802154_AUTO_ACK)
+	if (hdr_level >= 0) {
+		return (int16_t)(hdr_level + CONFIG_ESP_SDR_IEEE802154_RSSI_OFFSET);
+	}
+#endif
+	return IEEE802154_MAC_RSSI_DBM_UNDEFINED;
+}
 
 static void on_frame(const uint8_t *psdu, uint8_t len, int lqi, void *user)
 {
@@ -305,24 +332,28 @@ static void on_frame(const uint8_t *psdu, uint8_t len, int lqi, void *user)
 			STATS_UPDATE(d->stats.acks++);
 			return;
 		}
-#if defined(CONFIG_NET_L2_IEEE802154)
+#if defined(SDR154_NET)
 		/* An ACK nobody awaits is no data for the stack. */
 		return;
 #endif
 	}
 	STATS_UPDATE(d->stats.frames++);
-	/* IEEE802154_HW_FCS: frames go up without the FCS, checked here already. */
-	pkt = net_pkt_rx_alloc_with_buffer(d->iface, len - 2U, NET_AF_UNSPEC, 0, K_NO_WAIT);
+	/* IEEE802154_HW_FCS: checked here already; only some L2s (OpenThread) want it kept. */
+	if (!IS_ENABLED(CONFIG_IEEE802154_L2_PKT_INCL_FCS)) {
+		len -= 2U;
+	}
+	pkt = net_pkt_rx_alloc_with_buffer(d->iface, len, NET_AF_UNSPEC, 0, K_NO_WAIT);
 	if (pkt == NULL) {
 		STATS_UPDATE(d->stats.frames_dropped++);
 		return;
 	}
-	if (net_pkt_write(pkt, psdu, len - 2U) < 0) {
+	if (net_pkt_write(pkt, psdu, len) < 0) {
 		goto drop;
 	}
 	net_pkt_set_ieee802154_lqi(pkt, (uint8_t)lqi);
-	net_pkt_set_ieee802154_rssi_dbm(pkt, IEEE802154_MAC_RSSI_DBM_UNDEFINED);
-#if defined(CONFIG_NET_L2_IEEE802154)
+	net_pkt_set_ieee802154_rssi_dbm(pkt, frame_rssi_dbm());
+	LOG_DBG("rx %u lqi %d rssi %d", len, lqi, net_pkt_ieee802154_rssi_dbm(pkt));
+#if defined(SDR154_NET)
 	/*
 	 * Not ieee802154_handle_ack(): for a driver with HW_TX_RX_ACK it takes
 	 * every packet it is given. ACKs are consumed above.
@@ -571,6 +602,9 @@ static bool on_header(const uint8_t *psdu, uint8_t have, uint8_t len, uint32_t e
 	int ret;
 
 	ARG_UNUSED(len);
+	if (have == 0U) {
+		hdr_level = esp_sdr_rx_agc_level();
+	}
 	if (addr.promisc) {
 		return false;
 	}
@@ -974,9 +1008,21 @@ static enum ieee802154_hw_caps sdr154_caps(const struct device *dev)
 			: 0);
 }
 
+/* CCA mode 1 over 8 symbols (128 us). */
+#define CCA_READS 8
+
 static int sdr154_cca(const struct device *dev)
 {
 	ARG_UNUSED(dev);
+	for (int k = 0; k < CCA_READS; k++) {
+		int level = esp_sdr_rx_agc_level();
+
+		if (level >= 0 && level + CONFIG_ESP_SDR_IEEE802154_RSSI_OFFSET >=
+					  CONFIG_ESP_SDR_IEEE802154_CCA_THRESHOLD) {
+			return -EBUSY;
+		}
+		k_busy_wait(128 / CCA_READS);
+	}
 	return 0;
 }
 
@@ -1368,7 +1414,7 @@ void ieee154_esp_sdr_clear_stats(void)
 	k_spin_unlock(&stats_lock, key);
 }
 
-#if defined(CONFIG_NET_L2_IEEE802154)
+#if defined(SDR154_NET)
 static void sdr154_iface_init(struct net_if *iface)
 {
 	const struct device *dev = net_if_get_device(iface);
@@ -1446,7 +1492,7 @@ static int sdr154_init(const struct device *dev)
 }
 
 static const struct ieee802154_radio_api sdr154_api = {
-#if defined(CONFIG_NET_L2_IEEE802154)
+#if defined(SDR154_NET)
 	.iface_api.init = sdr154_iface_init,
 #endif
 	.get_capabilities = sdr154_caps,
@@ -1461,11 +1507,18 @@ static const struct ieee802154_radio_api sdr154_api = {
 	.attr_get = sdr154_attr_get,
 };
 
-#if !defined(CONFIG_NET_L2_IEEE802154)
-DEVICE_DEFINE(esp_sdr_154, "esp_sdr_154", sdr154_init, NULL, &sdr154, NULL, POST_KERNEL,
-	      CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &sdr154_api);
-#else
+#if defined(CONFIG_NET_L2_OPENTHREAD)
+/* OpenThread's radio glue takes its radio from the zephyr,ieee802154 chosen node. */
+#define DT_DRV_COMPAT esp_sdr_ieee802154
+BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(esp_sdr_ieee802154),
+	     "OpenThread needs an esp-sdr,ieee802154 node, chosen as zephyr,ieee802154");
+NET_DEVICE_DT_INST_DEFINE(0, sdr154_init, NULL, &sdr154, NULL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+			  &sdr154_api, OPENTHREAD_L2, NET_L2_GET_CTX_TYPE(OPENTHREAD_L2), 1280);
+#elif defined(CONFIG_NET_L2_IEEE802154)
 NET_DEVICE_INIT(esp_sdr_154, "esp_sdr_154", sdr154_init, NULL, &sdr154, NULL,
 		CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &sdr154_api, IEEE802154_L2,
 		NET_L2_GET_CTX_TYPE(IEEE802154_L2), IEEE802154_MTU);
+#else
+DEVICE_DEFINE(esp_sdr_154, "esp_sdr_154", sdr154_init, NULL, &sdr154, NULL, POST_KERNEL,
+	      CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &sdr154_api);
 #endif
