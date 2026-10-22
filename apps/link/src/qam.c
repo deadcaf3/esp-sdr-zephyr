@@ -12,6 +12,8 @@
 #include <math.h>
 #include <string.h>
 
+#include <esp_sdr/esp_sdr_dsp.h>
+
 #include "hamming.h"
 #include "qam.h"
 
@@ -20,8 +22,6 @@
 #include <stdlib.h>
 #endif
 
-#define PI     3.14159265358979323846f
-#define TWO_PI 6.28318530717958647692f
 #define MIN_SZ(a, b) ((a) < (b) ? (a) : (b))
 #define MIN_INT(a, b) ((a) < (b) ? (a) : (b))
 #define MAX_INT(a, b) ((a) > (b) ? (a) : (b))
@@ -65,6 +65,12 @@ struct cf {
 static inline struct cf cmul(struct cf a, struct cf b)
 {
 	return (struct cf){a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re};
+}
+
+/* exp(j a). */
+static inline struct cf cis(float a)
+{
+	return (struct cf){cosf(a), sinf(a)};
 }
 
 uint32_t (*qam_clock)(void);
@@ -199,26 +205,62 @@ static const uint32_t crc32_nibble[16] = {
 	0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c,
 };
 
-/* The byte table (1 KB), built from the nibble one on first use: a lookup per byte. */
-static uint32_t crc32_byte[256];
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "the CRC-32 reads four bytes as a little endian word"
+#endif
+
+/*
+ * Byte tables (4 KB), built from the nibble one: crc32_tab[0] a byte, [k] the
+ * same followed by k zero bytes, so four bytes are four lookups (slicing by 4)
+ * from an aligned word.
+ */
+static uint32_t crc32_tab[4][256];
 static bool crc32_ready;
+
+void qam_crc_init(void)
+{
+	for (unsigned int b = 0; b < 256U; b++) {
+		uint32_t v = b;
+
+		v = (v >> 4) ^ crc32_nibble[v & 15U];
+		v = (v >> 4) ^ crc32_nibble[v & 15U];
+		crc32_tab[0][b] = v;
+	}
+	for (unsigned int k = 1; k < 4U; k++) {
+		for (unsigned int b = 0; b < 256U; b++) {
+			uint32_t v = crc32_tab[k - 1U][b];
+
+			crc32_tab[k][b] = (v >> 8) ^ crc32_tab[0][v & 0xffU];
+		}
+	}
+	crc32_ready = true;
+}
 
 static uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)
 {
 	if (!crc32_ready) {
-		for (unsigned int b = 0; b < 256U; b++) {
-			uint32_t v = b;
-
-			v = (v >> 4) ^ crc32_nibble[v & 15U];
-			v = (v >> 4) ^ crc32_nibble[v & 15U];
-			crc32_byte[b] = v;
-		}
-		crc32_ready = true;
+		qam_crc_init();
 	}
-	for (size_t i = 0; i < n; i++) {
-		crc = (crc >> 8) ^ crc32_byte[(crc ^ p[i]) & 0xffU];
+	/* Bytes to a word boundary, words, the rest. */
+	while (n > 0U && ((uintptr_t)p & 3U) != 0U) {
+		crc = (crc >> 8) ^ crc32_tab[0][(crc ^ *p++) & 0xffU];
+		n--;
+	}
+	for (; n >= 4U; n -= 4U, p += 4) {
+		uint32_t w = crc ^ *(const uint32_t *)(const void *)p;
+
+		crc = crc32_tab[3][w & 0xffU] ^ crc32_tab[2][(w >> 8) & 0xffU] ^
+		      crc32_tab[1][(w >> 16) & 0xffU] ^ crc32_tab[0][w >> 24];
+	}
+	while (n-- > 0U) {
+		crc = (crc >> 8) ^ crc32_tab[0][(crc ^ *p++) & 0xffU];
 	}
 	return crc;
+}
+
+uint32_t qam_crc32_cont(uint32_t crc, const uint8_t *p, size_t n)
+{
+	return ~crc32_update(~crc, p, n);
 }
 
 uint32_t qam_crc32(const uint8_t *p, size_t n)
@@ -263,17 +305,12 @@ static bool hdr_unpack(const uint8_t b[QAM_HDR_BYTES], struct qam_hdr *h)
 static float rc(float t)
 {
 	const float b = QAM_RC_BETA;
-	float x = 2.0f * b * t, s;
+	float x = 2.0f * b * t;
 
-	if (fabsf(t) < 1e-6f) {
-		return 1.0f;
-	}
-	s = sinf(PI * t) / (PI * t);
 	if (fabsf(1.0f - x * x) < 1e-5f) {
-		return PI / 4.0f * sinf(PI / (2.0f * b)) /
-		       (PI / (2.0f * b));
+		return ESP_SDR_TAU_F / 8.0f * esp_sdr_sincf(1.0f / (2.0f * b));
 	}
-	return s * cosf(PI * b * t) / (1.0f - x * x);
+	return esp_sdr_sincf(t) * cosf(ESP_SDR_TAU_F / 2.0f * b * t) / (1.0f - x * x);
 }
 
 void qam_tx_init(struct qam_tx *tx, enum qam_mod mod, int amp)
@@ -1241,7 +1278,7 @@ static int acquire(struct qam_rx *rx, size_t n, int t_center, float f, struct qa
 
 	/* Fine timing against the known preamble: whole symbols first, then samples. */
 	{
-		struct cf st = {cosf(-TWO_PI * f * QAM_SPS), sinf(-TWO_PI * f * QAM_SPS)};
+		struct cf st = cis(-ESP_SDR_TAU_F * f * QAM_SPS);
 		struct cf p = {1.0f, 0.0f};
 		int center = t_center;
 
@@ -1307,7 +1344,7 @@ static int acquire(struct qam_rx *rx, size_t n, int t_center, float f, struct qa
 			p.re += s0.re * s1.re + s0.im * s1.im;
 			p.im += s0.im * s1.re - s0.re * s1.im;
 		}
-		f = -atan2f(p.im, p.re) / (TWO_PI * (float)lag);
+		f = -atan2f(p.im, p.re) / (ESP_SDR_TAU_F * (float)lag);
 	}
 	info->cfo_hz = f * 80e6f;
 	PROF(1);
@@ -1316,8 +1353,8 @@ static int acquire(struct qam_rx *rx, size_t n, int t_center, float f, struct qa
 	ratio = rx->carrier_hz > 0.0f ? 1.0f - info->cfo_hz / rx->carrier_hz : 1.0f;
 	j->r.pos = (int64_t)j->r.t0 << 32;
 	j->r.step_q = (int64_t)((double)QAM_SPS * (double)ratio * 4294967296.0);
-	j->r.rot = (struct cf){cosf(-TWO_PI * f * (float)j->r.t0), sinf(-TWO_PI * f * (float)j->r.t0)};
-	j->r.step = (struct cf){cosf(-TWO_PI * f * QAM_SPS * ratio), sinf(-TWO_PI * f * QAM_SPS * ratio)};
+	j->r.rot = cis(-ESP_SDR_TAU_F * f * (float)j->r.t0);
+	j->r.step = cis(-ESP_SDR_TAU_F * f * QAM_SPS * ratio);
 	if (!train(rx, &j->r, e, info)) {
 		return QAM_RX_NONE;
 	}
@@ -1343,7 +1380,7 @@ static int acquire(struct qam_rx *rx, size_t n, int t_center, float f, struct qa
 		return QAM_RX_HEADER;
 	}
 	j->r.len_q = (int64_t)((double)j->r.len * (double)ratio * 4294967296.0);
-	j->r.wrap = (struct cf){cosf(TWO_PI * f * (float)j->r.len), sinf(TWO_PI * f * (float)j->r.len)};
+	j->r.wrap = cis(ESP_SDR_TAU_F * f * (float)j->r.len);
 	/*
 	 * The equalizer reads HALF symbols past the frame end and interpolation
 	 * two samples more: measure whenever those reads leave the window.
@@ -1413,7 +1450,8 @@ int qam_rx_begin(struct qam_rx *rx, const uint32_t *words, size_t n, struct qam_
 	j->prof_t = prof_t;
 	/* Coarse offset (cycles per sample) from the half lag. */
 	return acquire(rx, n, ibest * SEARCH_STEP,
-		       -atan2f(pbi, pbr) / (TWO_PI * (float)(SEARCH_HALF * SEARCH_STEP)), hdr, info);
+		       -atan2f(pbi, pbr) / (ESP_SDR_TAU_F * (float)(SEARCH_HALF * SEARCH_STEP)),
+		       hdr, info);
 }
 
 int qam_rx_begin_at(struct qam_rx *rx, const uint32_t *words, size_t n, int start, float cfo_hz,

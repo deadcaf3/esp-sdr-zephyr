@@ -27,7 +27,10 @@ and comparing the AGC force register (`0x6001c02c`) does not detect it:
 last force is more than 20 ms old (`esp_sdr_rx_gain_refresh()` in
 `lib/esp_sdr/src/esp_sdr_rx.c`, `GAIN_REFRESH_MS`). Each re-force costs 14 to
 51 us. `esp_sdr_get_stats()` counts them, and `link status` prints them on
-its engine line. A turnaround back to receive also forces the gain.
+its engine line. A turnaround back to receive also forces the gain. A ring
+run re-forces between units: every 20 ms when it sends bursts, every second
+when it only receives, since a re-force is longer than the slack of short
+units (`apps/chancap`'s 128 us units dropped a few pairs at each one).
 
 When debugging this kind of fault: any `link set` in `apps/link` re-applies
 the whole radio configuration, which hides it.
@@ -425,7 +428,7 @@ XIAO ESP32-C6 on the other end of a 30 dB coax attenuator.
   PHY over at the next restart; the PC sees no disconnect then, and a
   `USBDEVFS_RESET` ioctl on the port's `/dev/bus/usb` node makes it
   enumerate.
-- **A reset with no crash record** (`app crash`, `link status`) is the TG0
+- **A reset with no crash record** (`multiapp crash`, `link status`) is the TG0
   watchdog's first stage: a CPU wedged with interrupts masked.
 - **Stacks.** With `CONFIG_INIT_STACKS`, `kernel thread stacks` after
   exercising every path; a measured peak up to 80 % of the size is enough

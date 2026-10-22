@@ -119,7 +119,7 @@ static int boot_pick(void)
 	const struct multiapp_embedded *app;
 
 	if (request.magic == TRIED_MAGIC) {
-		/* The boot that tried an app ended before "app run" or a reset: report it. */
+		/* The boot that tried an app ended before "multiapp run" or a reset: report it. */
 		tried = true;
 		tried_step = request.step;
 		memcpy(tried_name, request.name, sizeof(tried_name));
@@ -208,7 +208,7 @@ static void sync_text(const struct llext *ext)
 	Cache_Invalidate_Addr(text + IBUS_DBUS_OFFSET, size);
 }
 
-/* Record how far this boot's app got, until the next "app run" or reset. */
+/* Record how far this boot's app got, until the next "multiapp run" or reset. */
 static void boot_step(enum boot_step step)
 {
 	if (request.magic == TRIED_MAGIC) {
@@ -410,7 +410,7 @@ bool multiapp_boot(void)
 		/* USB has not started: it comes up without the app's classes, with the drive. */
 		usb_profile = MULTIAPP_USB_MSC;
 	}
-	/* Before the shell is open: "app info" tells. */
+	/* Before the shell is open: "multiapp info" tells. */
 	boot_ret = ret;
 	return ret == 0;
 }
@@ -468,7 +468,7 @@ static int proxy_cmd(const char *name, const struct shell *sh, size_t argc, char
 	const struct shell_static_entry *root = root_find(name);
 
 	if (root == NULL) {
-		shell_error(sh, "%s: no loaded app has this command (app list)", name);
+		shell_error(sh, "%s: no loaded app has this command (multiapp list)", name);
 		return -ENOEXEC;
 	}
 	if (root->handler == NULL) {
@@ -500,7 +500,7 @@ static int proxy_cmd(const char *name, const struct shell *sh, size_t argc, char
 		return proxy_cmd(STRINGIFY(_name), sh, argc, argv);                                \
 	}                                                                                          \
 	SHELL_CMD_ARG_REGISTER(_name, &UTIL_CAT(proxy_sub_, _name),                                \
-			       "Command of the loaded app (app list)", UTIL_CAT(proxy_cmd_, _name), \
+			       "Command of the loaded app (multiapp list)", UTIL_CAT(proxy_cmd_, _name), \
 			       1, SHELL_OPT_ARG_CHECK_SKIP)
 
 /* Every root command the apps register: hello, rfprobe, wpan, osmosdr and stream, link. */
@@ -550,7 +550,7 @@ static int cmd_run(const struct shell *sh, size_t argc, char **argv)
 
 	ARG_UNUSED(argc);
 	if (ret == -ENOENT) {
-		shell_error(sh, "%s: no such app (app list)", argv[1]);
+		shell_error(sh, "%s: no such app (multiapp list)", argv[1]);
 	} else if (ret == 1) {
 		shell_print(sh, "%s: rebooting into it%s", argv[1],
 			    (usb_profile & MULTIAPP_USB_MSC) != 0U
@@ -596,8 +596,6 @@ static int cmd_info(const struct shell *sh, size_t argc, char **argv)
 /* What ended the previous boot, if it ended badly (apps/common app_crash.h). */
 static int cmd_crash(const struct shell *sh, size_t argc, char **argv)
 {
-	struct app_crash_dx dx;
-	struct app_crash c;
 	size_t used, size;
 
 	ARG_UNUSED(argc);
@@ -612,23 +610,8 @@ static int cmd_crash(const struct shell *sh, size_t argc, char **argv)
 		shell_print(sh, "last DFU download: %zu of %zu bytes of the USB thread's stack used",
 			    used, size);
 	}
-	if (app_crash_dx_last(&dx)) {
-		shell_print(sh, "double exception: depc 0x%08x exccause %u excvaddr 0x%08x"
-			    " epc1 0x%08x ps 0x%08x a1 0x%08x prid 0x%x",
-			    dx.depc, dx.exccause, dx.excvaddr, dx.epc1, dx.ps, dx.a1, dx.prid);
-	}
-	if (!app_crash_last(&c)) {
+	if (!app_crash_print(sh)) {
 		shell_print(sh, "no fatal error or watchdog reset recorded");
-		return 0;
-	}
-	if (c.reason == APP_CRASH_WATCHDOG) {
-		shell_print(sh, "watchdog reset: thread %s cpu %u uptime %u ms", c.thread, c.cpu,
-			    c.uptime_ms);
-	} else {
-		shell_print(sh, "fatal error %u: thread %s cpu %u uptime %u ms pc 0x%08x a0 0x%08x"
-			    " ps 0x%08x exccause %u excvaddr 0x%08x",
-			    c.reason, c.thread, c.cpu, c.uptime_ms, c.pc, c.a0, c.ps, c.exccause,
-			    c.excvaddr);
 	}
 	return 0;
 }
@@ -639,4 +622,4 @@ SHELL_STATIC_SUBCMD_SET_CREATE(app_cmds,
 	SHELL_CMD(info, NULL, "The loaded app", cmd_info),
 	SHELL_CMD(crash, NULL, "What ended the previous boot", cmd_crash),
 	SHELL_SUBCMD_SET_END);
-SHELL_CMD_REGISTER(app, &app_cmds, "Apps run as extensions", NULL);
+SHELL_CMD_REGISTER(multiapp, &app_cmds, "Apps run as extensions", NULL);

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Unit test of apps/link/src/rs.c (RS(255,231)) on native_sim. rs.c takes
+# Unit test of apps/link/src/rs.c (RS(255,223)) on native_sim. rs.c takes
 # the __ZEPHYR__ branch (IRAM_ATTR from hal_espressif's esp_attr.h, not
 # available here) when built inside any Zephyr app, native_sim included:
 # undefine it for this one file, same as the host simulators
@@ -15,5 +15,8 @@ project(link_rs_unit)
 set(RS_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../apps/link/src/rs.c)
 
 target_sources(app PRIVATE src/main.c ${RS_SRC})
-target_include_directories(app PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../../apps/link/src)
+target_include_directories(app PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/../../../apps/link/src
+  ${CMAKE_CURRENT_LIST_DIR}/../../../include
+  ${CMAKE_CURRENT_LIST_DIR}/../../common/include)
 set_source_files_properties(${RS_SRC} PROPERTIES COMPILE_OPTIONS "-U__ZEPHYR__")

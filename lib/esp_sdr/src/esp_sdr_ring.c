@@ -31,6 +31,7 @@
 #include <esp_attr.h>
 
 #include <esp_sdr/esp_sdr.h>
+#include <esp_sdr/esp_sdr_dsp.h>
 #include <esp_sdr/esp_sdr_ring.h>
 
 #include "esp_sdr_priv.h"
@@ -99,8 +100,6 @@ static bool geom_two_banks(const struct geom *g)
 {
 	return 3U * g->thr + g->eg + g->late <= RING_PAIRS;
 }
-
-#define PI_F 3.14159265f
 
 extern uint32_t __esp_sdr_bank0_start[];
 
@@ -332,7 +331,7 @@ static float kaiser_tap(uint32_t i, uint32_t l, float fc)
 {
 	float m = (float)i - 0.5f * (float)(l - 1U);
 	float x = 2.0f * fc * m;
-	float sinc = fabsf(x) < 1e-6f ? 1.0f : sinf(PI_F * x) / (PI_F * x);
+	float sinc = esp_sdr_sincf(x);
 	float r = 2.0f * m / (float)(l - 1U);
 
 	return 2.0f * fc * sinc * bessel_i0(5.65f * sqrtf(fmaxf(0.0f, 1.0f - r * r))) /
@@ -477,7 +476,15 @@ static struct {
 	/* Finished units waiting for the filter, oldest first. */
 	struct unit q[RING_BANKS - 1U];
 	unsigned int q_len;
-	uint32_t slice_cost;
+	/*
+	 * The slowest recent filter slice (cycles): a slower one raises it at once, and it gives
+	 * up 1/16 every default unit length of input (768 us at 16 MS/s, decay_pairs counts), at
+	 * the same pace whatever the unit length. As the slowest of the whole run, one slice slowed
+	 * by the other CPU's PSRAM traffic at the start (the S3's display drawing) kept the filter
+	 * from slices it had time for, and with about 10 % to spare it then dropped part of every
+	 * unit for good.
+	 */
+	uint32_t slice_cost, decay_pairs;
 	uint64_t fir_cycles, fir_pairs;
 	/* The interrupt key of the run, for the windows in irq_window(). */
 	unsigned int irq_key;
@@ -1399,7 +1406,7 @@ HOT static void ring_loop(void)
 				prepared = true;
 				continue;
 			}
-			/* A slice only if the slowest one seen still fits. */
+			/* A slice only if the slowest recent one still fits. */
 			int32_t limit = prepared ? (int32_t)(g.thr + g.late / 2U)
 						 : (int32_t)g.thr - (int32_t)(prep_pairs + g.late);
 
@@ -1486,6 +1493,11 @@ HOT static void ring_loop(void)
 		}
 		unit_accept(b, first, count, index);
 		st->units++;
+		rs.decay_pairs += count;
+		if (rs.decay_pairs >= ESP_SDR_RING_UNIT_DEFAULT) {
+			rs.decay_pairs -= ESP_SDR_RING_UNIT_DEFAULT;
+			rs.slice_cost -= rs.slice_cost / 16U;
+		}
 		index += count;
 		expected = end;
 		b = next;
@@ -1517,8 +1529,14 @@ HOT static void ring_loop(void)
 		if (stop) {
 			break;
 		}
-		/* The forced gain gets lost now and then (see esp_sdr_rx_gain_refresh()). */
-		if (esp_sdr_rx_gain_refresh()) {
+		/*
+		 * The forced gain gets lost now and then, after transmissions (see
+		 * esp_sdr_rx_gain_refresh()). A re-force takes 14 to 51 us, too long for the
+		 * slack of short units (chancap's 128 us dropped a few pairs at every one, 50 a
+		 * second): every 20 ms with bursts, every second in a run that only receives.
+		 */
+		if (rs.burst_ok ? esp_sdr_rx_gain_refresh()
+				: esp_sdr_rx_gain_refresh_after(SDR_GAIN_REFRESH_RX_ONLY_MS)) {
 			st->gain_refreshed++;
 		}
 	}
@@ -1527,6 +1545,8 @@ HOT static void ring_loop(void)
 	atomic_set(&now_ref.seq, 0);
 	REG_WRITE(DUMP_CTRL_REG, 0);
 	REG_WRITE(SENSITIVE_INTERNAL_SRAM_USAGE_3_REG, saved);
+	/* No more bursts: an arm during the drain below would outlive the run. */
+	atomic_set(&active, 0);
 	if (atomic_get(&burst_state) != BURST_IDLE) {
 		bst.cancelled++;
 		atomic_set(&burst_state, BURST_IDLE);
@@ -1566,6 +1586,11 @@ int esp_sdr_ring_run(const struct esp_sdr_ring_cfg *cfg, struct esp_sdr_ring_sta
 	rs.nbanks = (cfg->spare_bank || cfg->spare_bank_app) ? RING_BANKS - 1U : RING_BANKS;
 	rs.burst_ok = cfg->spare_bank && !cfg->spare_bank_app;
 	memset(&bst, 0, sizeof(bst));
+	/* An arm that slipped in as the previous run ended carries its pair numbers. */
+	if (atomic_get(&burst_state) != BURST_IDLE) {
+		bst.cancelled++;
+		atomic_set(&burst_state, BURST_IDLE);
+	}
 	rs.gen_cost = 2000U;
 	rs.cfg = cfg;
 	rs.st = stats;

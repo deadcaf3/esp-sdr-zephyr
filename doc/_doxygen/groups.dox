@@ -35,6 +35,13 @@
  */
 
 /**
+ * @defgroup esp_sdr_chancap Channelized burst capture
+ * @ingroup esp_sdr
+ * @brief One I/Q capture per packet per channel of a uniform grid, from the ring on the
+ * other CPU, ESP32-S3 (esp_sdr_chancap.h, CONFIG_ESP_SDR_CHANCAP).
+ */
+
+/**
  * @defgroup esp_sdr_diag Diagnostic-bus ring
  * @ingroup esp_sdr
  * @brief Gapless 40 MS/s receive through the modem diagnostic bus and PARLIO, ESP32-C5
@@ -63,4 +70,11 @@
  * @defgroup ieee154_esp_sdr Radio driver diagnostics
  * @ingroup ieee154
  * @brief Counters, measurements and traces of the esp_sdr_154 device (ieee154_esp_sdr.h).
+ */
+
+/**
+ * @defgroup esp_sdr_dsp Signal processing helpers
+ * @ingroup esp_sdr
+ * @brief The turn constant, windows, sinc, FFT and whole-cycle tones, header only and free of
+ * Zephyr (esp_sdr_dsp.h).
  */

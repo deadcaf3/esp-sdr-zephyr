@@ -4,12 +4,12 @@ group-filter = ["-babblesim", "-optional", "-testing"]
 [[manifest.projects]]
 name = "zephyr"
 url = "https://github.com/deadcaf3/zephyr"
-revision = "ffb8a7cce5d31e098a09854d065e2e5ef7c493a4"
+revision = "03b033e2609da2cf66937c6500d0a0cc22781c4f"
 path = "modules/zephyr"
 west-commands = "scripts/west-commands.yml"
 
 [manifest.projects.nix]
-hash = "sha256-hsljlgGSKRWV71oK48J0J9jjmQRxdI8pq0I5ZD7JJrQ="
+hash = "sha256-40k/rykKt3HRJzVipUKRaC1PuOCpY8Fq7G6fPZ/1ntI="
 
 [[manifest.projects]]
 name = "hal_espressif"
@@ -47,6 +47,51 @@ path = "modules/lib/esp-dsp"
 
 [manifest.projects.nix]
 hash = "sha256-APW/rEinKZI4d0d+nej3FgoZ94P2IknzADzsdywHC1s="
+
+[[manifest.projects]]
+name = "micropython"
+url = "https://github.com/micropython/micropython"
+revision = "0fd6c573ea815774668bbb16b8e197c8822368b2"
+path = "modules/micropython"
+
+[manifest.projects.nix]
+hash = "sha256-BJCVnTF5coEE1zOPffprWzUzqUlF3Qv3L4DwMqzGAsQ="
+
+[[manifest.projects]]
+name = "micropython-lib"
+url = "https://github.com/micropython/micropython-lib"
+revision = "ee4bb8ff139e24c42b739935fbd8ec7c4d061e02"
+path = "modules/micropython/lib/micropython-lib"
+
+[manifest.projects.nix]
+hash = "sha256-nmGwxXwAO5DBTv+4A4l70Cdct21KVkjmjGZ5YntdulE="
+
+[[manifest.projects]]
+name = "lvgl"
+url = "https://github.com/zephyrproject-rtos/lvgl"
+revision = "d1fe35d350a1503db2ec7fd4dfff8e0cc26eea7e"
+path = "modules/lib/gui/lvgl"
+
+[manifest.projects.nix]
+hash = "sha256-aVtcZotDW5sggNc/9Nmhpl3bDSbgWUCs+iKvX2kxQAk="
+
+[[manifest.projects]]
+name = "lv_binding_micropython"
+url = "https://github.com/deadcaf3/lv_binding_micropython"
+revision = "ded0cd857fc8b813753facfbae011ac5e74961f6"
+path = "modules/lib/gui/lv_binding_micropython"
+
+[manifest.projects.nix]
+hash = "sha256-IByLogJJQ/QTv+mxTyJQym/TU8BbQotibtw7XaiC6zI="
+
+[[manifest.projects]]
+name = "pycparser"
+url = "https://github.com/eliben/pycparser"
+revision = "3cf6bf5eb16f5eadd4a058e41596145c407a79ad"
+path = "modules/lib/gui/lv_binding_micropython/pycparser"
+
+[manifest.projects.nix]
+hash = "sha256-3X0jr7bKNdz3n/82dMuwTyKHJYgLW2QEQ+Lj6esZ91Q="
 
 [[manifest.projects]]
 name = "fatfs"
