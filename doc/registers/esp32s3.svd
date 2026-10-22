@@ -461,19 +461,46 @@
         <register>
           <name>R6C</name>
           <description>
-            AGC RSSI; lead, not tried
+            AGC state: idle flag, input level, gain index
+            While a signal holds the AGC (IDLE 0), GAIN plus RSSI stayed at 86 to 90 over 35
+            802.15.4 frames from several senders (GAIN 33 to 66). Idle on noise it reads GAIN 75
+            to 78, RSSI 10 to 13. Read about 100 us after a frame ends it is mostly back at
+            idle, so read it while the frame is on air.
+            Evidence: *measured* bench 2026-10-22 (AGC in charge, channels 23 and 25, read at
+            each frame's PHR and after its FCS)
           </description>
           <addressOffset>0x6c</addressOffset>
           <fields>
             <field>
+              <name>IDLE</name>
+              <description>
+                1 on noise; 0 while a signal holds the AGC (it can stay 1 for weak frames).
+                Evidence: *measured* bench 2026-10-22
+              </description>
+              <bitRange>[24:24]</bitRange>
+              <access>read-only</access>
+            </field>
+            <field>
               <name>RSSI</name>
               <description>
-                AGC RSSI. With the CCA busy counters (BB_CCA_BUSY_CNT0_REG to
-                BB_CCA_BUSY_CNT2_REG) a candidate for 802.15.4 energy detection and CCA,
-                work it could take off the CPU; lead, not tried.
-                Evidence: *decompile* S3 `libphy.a`
+                Input level, about 1 dB steps (the AGC's gain index moves one for one against
+                it), uncalibrated. The 802.15.4 driver's RSSI. With the CCA busy counters
+                (BB_CCA_BUSY_CNT0_REG to BB_CCA_BUSY_CNT2_REG) a candidate for energy detection
+                and CCA.
+                Evidence: *decompile* S3 `libphy.a`; *measured* bench 2026-10-22; *working*
+                `lib/esp_sdr/src/esp_sdr_rx.c` (`esp_sdr_rx_agc_level()`)
               </description>
               <bitRange>[15:8]</bitRange>
+              <access>read-only</access>
+            </field>
+            <field>
+              <name>GAIN</name>
+              <description>
+                The AGC's current gain index (same scale as AGC_FORCE_REG FORCE_INDEX): high
+                when idle, lower while a strong signal is on air.
+                Evidence: *measured* bench 2026-10-22
+              </description>
+              <bitRange>[7:0]</bitRange>
               <access>read-only</access>
             </field>
           </fields>

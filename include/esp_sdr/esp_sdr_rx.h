@@ -69,6 +69,18 @@ int esp_sdr_rx_set_gain(int index);
 /** @return Selected gain index, or ESP_SDR_RX_GAIN_AUTO. */
 int esp_sdr_rx_get_gain(void);
 
+/**
+ * @brief Input level the Wi-Fi AGC measures now.
+ *
+ * Steps of about 1 dB, uncalibrated: the AGC's gain index plus this level stays
+ * near 89 while a signal holds it; idle on noise it reads about 12. Read it
+ * while the signal is on air: after it, the AGC returns to its idle gain.
+ *
+ * @return Level, 0 to 255.
+ * @retval -ENOTSUP on chips other than the ESP32-S3 (not located there).
+ */
+int esp_sdr_rx_agc_level(void);
+
 /** @return Largest calibrated gain index, 0 if the PHY reports none. */
 int esp_sdr_rx_gain_max(void);
 

@@ -113,7 +113,7 @@ Evidence: *decompile* S3 `phy_debug.o` (`phy_i2c_check`).
 | [SENSITIVE_INTERNAL_SRAM_USAGE_3_REG](#register-sensitive_internal_sram_usage_3_reg-0x600c101c) | Hands SRAM banks to the dump engine | 0x600c101c | R/W |
 | **AGC force** | | | |
 | [AGC_FORCE_REG](#register-agc_force_reg-0x6001c02c) | Forced receive gain index, force bit and largest calibrated index | 0x6001c02c | R/W |
-| [AGC_R6C_REG](#register-agc_r6c_reg-0x6001c06c) | AGC RSSI; lead, not tried | 0x6001c06c | RO |
+| [AGC_R6C_REG](#register-agc_r6c_reg-0x6001c06c) | AGC state: idle flag, input level, gain index | 0x6001c06c | RO |
 | [AGC_R80_REG](#register-agc_r80_reg-0x6001c080) | Unknown; bits 7:6 cleared by `bt_rx_force(0)` | 0x6001c080 | R/W |
 | **Front end** | | | |
 | [FE_TX_CTRL_REG](#register-fe_tx_ctrl_reg-0x60006000) | Force TX on and the TX gain memory index | 0x60006000 | R/W |
@@ -422,17 +422,29 @@ Evidence:
 
 #### Register AGC_R6C_REG (0x6001c06c)
 
-AGC RSSI; lead, not tried
+AGC state: idle flag, input level, gain index
 
-| Bits | 31:16 | 15:8 | 7:0 |
-|---|---|---|---|
-| Field | (unknown) | AGC_RSSI | (unknown) |
+| Bits | 31:25 | 24 | 23:16 | 15:8 | 7:0 |
+|---|---|---|---|---|---|
+| Field | (unknown) | AGC_IDLE | (unknown) | AGC_RSSI | AGC_GAIN |
 
-**AGC_RSSI** AGC RSSI. With the CCA busy counters (BB_CCA_BUSY_CNT0_REG to BB_CCA_BUSY_CNT2_REG) a candidate for 802.15.4 energy detection and CCA, work it could take off the CPU; lead, not tried. (RO)
+**AGC_IDLE** 1 on noise; 0 while a signal holds the AGC (it can stay 1 for weak frames). (RO)
+
+**AGC_RSSI** Input level, about 1 dB steps (the AGC's gain index moves one for one against it), uncalibrated. The 802.15.4 driver's RSSI. With the CCA busy counters (BB_CCA_BUSY_CNT0_REG to BB_CCA_BUSY_CNT2_REG) a candidate for energy detection and CCA. (RO)
+
+**AGC_GAIN** The AGC's current gain index (same scale as AGC_FORCE_REG FORCE_INDEX): high when idle, lower while a strong signal is on air. (RO)
+
+While a signal holds the AGC (IDLE 0), GAIN plus RSSI stayed at 86 to 90 over 35
+802.15.4 frames from several senders (GAIN 33 to 66). Idle on noise it reads GAIN 75
+to 78, RSSI 10 to 13. Read about 100 us after a frame ends it is mostly back at
+idle, so read it while the frame is on air.
 
 Evidence:
 
-- AGC_RSSI: *decompile* S3 `libphy.a`
+- *measured* bench 2026-10-22 (AGC in charge, channels 23 and 25, read at each frame's PHR and after its FCS)
+- AGC_IDLE: *measured* bench 2026-10-22
+- AGC_RSSI: *decompile* S3 `libphy.a`; *measured* bench 2026-10-22; *working* `lib/esp_sdr/src/esp_sdr_rx.c` (`esp_sdr_rx_agc_level()`)
+- AGC_GAIN: *measured* bench 2026-10-22
 
 #### Register AGC_R80_REG (0x6001c080)
 
