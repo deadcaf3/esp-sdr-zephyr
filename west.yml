@@ -36,6 +36,7 @@ manifest:
           - fatfs
           - mcuboot
           - mbedtls
+          - openthread
           - tf-psa-crypto
     # The HAL companion of the SMP port; listed here so it overrides the
     # revision Zephyr's own manifest pins.

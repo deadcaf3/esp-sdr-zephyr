@@ -1,0 +1,27 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+		/* OpenThread's radio. */
+		zephyr,ieee802154 = &esp_sdr_154;
+	};
+
+	esp_sdr_154: esp_sdr_154 {
+		compatible = "esp-sdr,ieee802154";
+		status = "okay";
+	};
+};
+
+zephyr_udc0: &usb_otg {
+	status = "okay";
+
+	/* Console, shell and logs while OTG owns the USB port. */
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "ESP-SDR Thread shell";
+	};
+};

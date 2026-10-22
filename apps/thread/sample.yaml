@@ -1,0 +1,14 @@
+sample:
+  name: thread
+  description: >-
+    Thread end device (OpenThread MTD) on the esp-sdr 802.15.4 software radio
+common:
+  tags: esp-sdr
+  sysbuild: true
+  platform_allow:
+    - xiao_esp32s3/esp32s3/procpu
+  integration_platforms:
+    - xiao_esp32s3/esp32s3/procpu
+tests:
+  sample.esp_sdr.thread:
+    build_only: true

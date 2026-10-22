@@ -26,6 +26,7 @@ The API reference of the library is generated with Doxygen:
    apps/osmosdr_serial
    apps/link
    apps/wpan
+   apps/thread
    apps/zstack
    apps/rfprobe
    apps/ubertooth
@@ -44,6 +45,7 @@ The API reference of the library is generated with Doxygen:
    chancap
    ieee802154
    ieee802154-ack
+   thread
    testing
    multiapp
    zigbit-reference
