@@ -185,6 +185,15 @@ int esp_sdr_rx_get_gain(void)
 	return gain_index;
 }
 
+int esp_sdr_rx_agc_level(void)
+{
+#if defined(CONFIG_SOC_SERIES_ESP32S3)
+	return (int)FIELD_GET(AGC_R6C_LEVEL, REG_READ(AGC_R6C_REG));
+#else
+	return -ENOTSUP;
+#endif
+}
+
 int esp_sdr_rx_gain_max(void)
 {
 	return (int)gain_max();

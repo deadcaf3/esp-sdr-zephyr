@@ -78,7 +78,10 @@ struct net_pkt;
  */
 typedef void (*ieee154_esp_sdr_rx_cb_t)(struct net_pkt *pkt);
 
-/** Set the frame sink used when CONFIG_NET_L2_IEEE802154 is off (ignored with it on). */
+/**
+ * Set the frame sink used without an L2 (ignored with CONFIG_NET_L2_IEEE802154 or
+ * CONFIG_NET_L2_OPENTHREAD on).
+ */
 void ieee154_esp_sdr_set_rx_cb(ieee154_esp_sdr_rx_cb_t cb);
 
 /**

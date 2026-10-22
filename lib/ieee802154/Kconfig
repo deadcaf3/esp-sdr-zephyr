@@ -8,12 +8,15 @@ config ESP_SDR_IEEE802154
 	  (device "esp_sdr_154"): receive gapless through the ring
 	  (ESP_SDR_IEEE802154_RING) or from 16 MS/s bank captures, transmit
 	  through the DAC backend. With CONFIG_NET_L2_IEEE802154 it is a
-	  network interface; without, a plain device whose frames go to
+	  network interface; with CONFIG_NET_L2_OPENTHREAD too, from an
+	  esp-sdr,ieee802154 devicetree node chosen as zephyr,ieee802154
+	  (apps/thread); without either, a plain device whose frames go to
 	  ieee154_esp_sdr_set_rx_cb() (raw 802.15.4 mode would compile out
 	  the interface layer the Wi-Fi driver needs). Waits for ACKs, sends
-	  them with ESP_SDR_IEEE802154_AUTO_ACK; no CCA: see
-	  doc/ieee802154.md. Needs CONFIG_IEEE802154 (packet fields) and
-	  CONFIG_HWINFO (the extended address comes from the chip's id).
+	  them with ESP_SDR_IEEE802154_AUTO_ACK; RSSI and CCA from the Wi-Fi
+	  AGC's input level: see doc/ieee802154.md. Needs CONFIG_IEEE802154
+	  (packet fields) and CONFIG_HWINFO (the extended address comes from
+	  the chip's id).
 
 if ESP_SDR_IEEE802154
 
@@ -46,6 +49,27 @@ config ESP_SDR_IEEE802154_ACK_PRIORITY
 	  From the frame's header to the verdict on its FCS (about 100 us
 	  after its end) the PHY thread runs at this priority, so that no
 	  other thread on CPU 0 delays the ACK.
+
+config ESP_SDR_IEEE802154_RSSI_OFFSET
+	int "RSSI offset in dB"
+	default -108
+	help
+	  RSSI and CCA energy in dBm are the Wi-Fi AGC's input level
+	  (esp_sdr_rx_agc_level(), steps of about 1 dB) plus this offset; a
+	  frame's is read at its PHR. The default puts the idle level, about
+	  12, at -96 dBm (thermal noise in about 20 MHz with a 5 dB noise
+	  figure): an estimate, not a calibration. Without
+	  ESP_SDR_IEEE802154_AUTO_ACK no header callback runs and frames
+	  carry no RSSI.
+
+config ESP_SDR_IEEE802154_CCA_THRESHOLD
+	int "CCA energy threshold in dBm"
+	default -75
+	help
+	  CCA mode 1: the channel is busy if the AGC's input level, read
+	  eight times over 128 us, reaches this once. The AGC measures its
+	  whole analog bandwidth, wider than the 2 MHz channel, so energy
+	  next to the channel (Wi-Fi) counts too.
 
 config ESP_SDR_IEEE802154_HIGH_RAM_APP
 	bool "Internal RAM from the application"

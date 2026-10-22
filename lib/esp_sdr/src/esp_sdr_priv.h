@@ -67,6 +67,12 @@
 #define AGC_GAIN_MAX       GENMASK(14, 8)
 /* Larger maxima on the S3 point at uncalibrated table slots. */
 #define AGC_GAIN_MAX_VALID 82U
+/*
+ * AGC state: idle 24, input level 15:8, gain index 7:0. While a signal holds
+ * the AGC (idle 0), gain index plus level stays near 89.
+ */
+#define AGC_R6C_REG   0x6001c06cU
+#define AGC_R6C_LEVEL GENMASK(15, 8)
 
 #elif defined(CONFIG_SOC_SERIES_ESP32C6)
 

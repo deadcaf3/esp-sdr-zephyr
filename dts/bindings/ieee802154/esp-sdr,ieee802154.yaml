@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+description: |
+  IEEE 802.15.4 software radio on the ESP32-S3 Wi-Fi receiver and DAC
+  (lib/ieee802154, CONFIG_ESP_SDR_IEEE802154). Needed as the
+  zephyr,ieee802154 chosen node when OpenThread is the L2.
+
+compatible: "esp-sdr,ieee802154"
+
+include: base.yaml

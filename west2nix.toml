@@ -124,6 +124,15 @@ groups = ["bootloader"]
 hash = "sha256-bhKqDOvRXtmbdIM1PpMJwwEOB9DyLodnWsQ+epmTLhY="
 
 [[manifest.projects]]
+name = "openthread"
+url = "https://github.com/zephyrproject-rtos/openthread"
+revision = "4a8d33459567cc611bf9d4d810c2201a24a64d84"
+path = "modules/lib/openthread"
+
+[manifest.projects.nix]
+hash = "sha256-4Wj4mhreKKKSNWIeTQ4D1oi/0b2BEWuSCIiH2D5e8JM="
+
+[[manifest.projects]]
 name = "tf-psa-crypto"
 url = "https://github.com/zephyrproject-rtos/tf-psa-crypto"
 revision = "765af96a20a2b408474dcd950372ba9af4d26b62"
